@@ -6,6 +6,7 @@ package middleware
 
 import (
 	"net/url"
+	"strings"
 
 	"github.com/go-martini/martini"
 
@@ -21,33 +22,35 @@ type ToggleOptions struct {
 
 func Toggle(options *ToggleOptions) martini.Handler {
 	return func(ctx *Context) {
+		// Cannot view any page before installation.
 		if !base.InstallLock {
 			ctx.Redirect("/install")
 			return
 		}
 
+		// Redirect to dashboard if user tries to visit any non-login page.
 		if options.SignOutRequire && ctx.IsSigned && ctx.Req.RequestURI != "/" {
 			ctx.Redirect("/")
 			return
 		}
 
-		if !options.DisableCsrf {
-			if ctx.Req.Method == "POST" {
-				if !ctx.CsrfTokenValid() {
-					ctx.Error(403, "CSRF token does not match")
-					return
-				}
-			}
+		if !options.DisableCsrf && ctx.Req.Method == "POST" && !ctx.CsrfTokenValid() {
+			ctx.Error(403, "CSRF token does not match")
+			return
 		}
 
 		if options.SignInRequire {
 			if !ctx.IsSigned {
+				// Ignore watch repository operation.
+				if strings.HasSuffix(ctx.Req.RequestURI, "watch") {
+					return
+				}
 				ctx.SetCookie("redirect_to", "/"+url.QueryEscape(ctx.Req.RequestURI))
 				ctx.Redirect("/user/login")
 				return
 			} else if !ctx.User.IsActive && base.Service.RegisterEmailConfirm {
 				ctx.Data["Title"] = "Activate Your Account"
-				ctx.HTML(200, "user/active")
+				ctx.HTML(200, "user/activate")
 				return
 			}
 		}

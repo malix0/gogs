@@ -98,9 +98,36 @@ func updateSystemStatus() {
 	sysStatus.NumGC = m.NumGC
 }
 
+// Operation types.
+const (
+	OT_CLEAN_OAUTH = iota + 1
+)
+
 func Dashboard(ctx *middleware.Context) {
 	ctx.Data["Title"] = "Admin Dashboard"
 	ctx.Data["PageIsDashboard"] = true
+
+	// Run operation.
+	op, _ := base.StrTo(ctx.Query("op")).Int()
+	if op > 0 {
+		var err error
+		var success string
+
+		switch op {
+		case OT_CLEAN_OAUTH:
+			success = "All unbind OAuthes have been deleted."
+			err = models.CleanUnbindOauth()
+		}
+
+		if err != nil {
+			ctx.Flash.Error(err.Error())
+		} else {
+			ctx.Flash.Success(success)
+		}
+		ctx.Redirect("/admin")
+		return
+	}
+
 	ctx.Data["Stats"] = models.GetStatistic()
 	updateSystemStatus()
 	ctx.Data["SysStatus"] = sysStatus
@@ -112,9 +139,9 @@ func Users(ctx *middleware.Context) {
 	ctx.Data["PageIsUsers"] = true
 
 	var err error
-	ctx.Data["Users"], err = models.GetUsers(100, 0)
+	ctx.Data["Users"], err = models.GetUsers(200, 0)
 	if err != nil {
-		ctx.Handle(200, "admin.Users", err)
+		ctx.Handle(500, "admin.Users", err)
 		return
 	}
 	ctx.HTML(200, "admin/users")
@@ -125,12 +152,25 @@ func Repositories(ctx *middleware.Context) {
 	ctx.Data["PageIsRepos"] = true
 
 	var err error
-	ctx.Data["Repos"], err = models.GetRepos(100, 0)
+	ctx.Data["Repos"], err = models.GetRepositoriesWithUsers(200, 0)
 	if err != nil {
-		ctx.Handle(200, "admin.Repositories", err)
+		ctx.Handle(500, "admin.Repositories", err)
 		return
 	}
 	ctx.HTML(200, "admin/repos")
+}
+
+func Auths(ctx *middleware.Context) {
+	ctx.Data["Title"] = "Auth Sources"
+	ctx.Data["PageIsAuths"] = true
+
+	var err error
+	ctx.Data["Sources"], err = models.GetAuths()
+	if err != nil {
+		ctx.Handle(500, "admin.Auths", err)
+		return
+	}
+	ctx.HTML(200, "admin/auths")
 }
 
 func Config(ctx *middleware.Context) {
@@ -139,9 +179,12 @@ func Config(ctx *middleware.Context) {
 
 	ctx.Data["AppUrl"] = base.AppUrl
 	ctx.Data["Domain"] = base.Domain
+	ctx.Data["OfflineMode"] = base.OfflineMode
+	ctx.Data["DisableRouterLog"] = base.DisableRouterLog
 	ctx.Data["RunUser"] = base.RunUser
 	ctx.Data["RunMode"] = strings.Title(martini.Env)
 	ctx.Data["RepoRootPath"] = base.RepoRootPath
+	ctx.Data["ScriptType"] = base.ScriptType
 
 	ctx.Data["Service"] = base.Service
 
@@ -153,6 +196,12 @@ func Config(ctx *middleware.Context) {
 		ctx.Data["Mailer"] = base.MailService
 	}
 
+	ctx.Data["OauthEnabled"] = false
+	if base.OauthService != nil {
+		ctx.Data["OauthEnabled"] = true
+		ctx.Data["Oauther"] = base.OauthService
+	}
+
 	ctx.Data["CacheAdapter"] = base.CacheAdapter
 	ctx.Data["CacheConfig"] = base.CacheConfig
 
@@ -160,6 +209,7 @@ func Config(ctx *middleware.Context) {
 	ctx.Data["SessionConfig"] = base.SessionConfig
 
 	ctx.Data["PictureService"] = base.PictureService
+	ctx.Data["DisableGravatar"] = base.DisableGravatar
 
 	ctx.Data["LogMode"] = base.LogMode
 	ctx.Data["LogConfig"] = base.LogConfig

@@ -15,14 +15,13 @@ var (
 )
 
 func init() {
-	NewLogger(10000, "console", `{"level": 0}`)
+	NewLogger(0, "console", `{"level": 0}`)
 }
 
 func NewLogger(bufLen int64, mode, config string) {
 	Mode, Config = mode, config
 	logger = logs.NewLogger(bufLen)
-	logger.EnableFuncCallDepth(true)
-	logger.SetLogFuncCallDepth(4)
+	logger.SetLogFuncCallDepth(3)
 	logger.SetLogger(mode, config)
 }
 

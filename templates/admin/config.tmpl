@@ -2,7 +2,7 @@
 {{template "base/navbar" .}}
 <div id="body" class="container" data-page="admin">
     {{template "admin/nav" .}}
-    <div id="admin-container" class="col-md-9">
+    <div id="admin-container" class="col-md-10">
         <div class="panel panel-default">
             <div class="panel-heading">
                 Server Configuration
@@ -18,6 +18,10 @@
                     <dd>{{.AppUrl}}</dd>
                     <dt>Domain</dt>
                     <dd>{{.Domain}}</dd>
+                    <dt>Offline Mode</dt>
+                    <dd><i class="fa fa{{if .OfflineMode}}-check{{end}}-square-o"></i></dd>
+                    <dt>Disable Router Log</dt>
+                    <dd><i class="fa fa{{if .DisableRouterLog}}-check{{end}}-square-o"></i></dd>
                     <hr/>
                     <dt>Run User</dt>
                     <dd>{{.RunUser}}</dd>
@@ -26,6 +30,8 @@
                     <hr/>
                     <dt>Repository Root Path</dt>
                     <dd>{{.RepoRootPath}}</dd>
+                    <dt>Script Type</dt>
+                    <dd>{{.ScriptType}}</dd>
                 </dl>
             </div>
         </div>
@@ -62,8 +68,8 @@
                 <dl class="dl-horizontal admin-dl-horizontal">
                     <dt>Register Email Confirmation</dt>
                     <dd><i class="fa fa{{if .Service.RegisterEmailConfirm}}-check{{end}}-square-o"></i></dd>
-                    <dt>Disenable Registeration</dt>
-                    <dd><i class="fa fa{{if .Service.DisenableRegisteration}}-check{{end}}-square-o"></i></dd>
+                    <dt>Disable Registration</dt>
+                    <dd><i class="fa fa{{if .Service.DisableRegistration}}-check{{end}}-square-o"></i></dd>
                     <dt>Require Sign In View</dt>
                     <dd><i class="fa fa{{if .Service.RequireSignInView}}-check{{end}}-square-o"></i></dd>
                     <dt>Mail Notification</dt>
@@ -88,12 +94,34 @@
                 <dl class="dl-horizontal admin-dl-horizontal">
                     <dt>Enabled</dt>
                     <dd><i class="fa fa{{if .MailerEnabled}}-check{{end}}-square-o"></i></dd>
-                    <dt>Name</dt>
+                    {{if .MailerEnabled}}<dt>Name</dt>
                     <dd>{{.Mailer.Name}}</dd>
                     <dt>Host</dt>
                     <dd>{{.Mailer.Host}}</dd>
                     <dt>User</dt>
-                    <dd>{{.Mailer.User}}</dd>
+                    <dd>{{.Mailer.User}}</dd>{{end}}
+                </dl>
+            </div>
+        </div>
+
+        <div class="panel panel-default">
+            <div class="panel-heading">
+                OAuth Configuration
+            </div>
+
+            <div class="panel-body">
+                <dl class="dl-horizontal admin-dl-horizontal">
+                    <dt>Enabled</dt>
+                    <dd><i class="fa fa{{if .OauthEnabled}}-check{{end}}-square-o"></i></dd>
+                    {{if .OauthEnabled}}<dt>GitHub</dt>
+                    <dd><i class="fa fa{{if .Oauther.GitHub}}-check{{end}}-square-o"></i></dd>
+                    <dt>Google</dt>
+                    <dd><i class="fa fa{{if .Oauther.Google}}-check{{end}}-square-o"></i></dd>
+                    <dt>Tencent QQ</dt>
+                    <dd><i class="fa fa{{if .Oauther.Tencent}}-check{{end}}-square-o"></i></dd>
+                    <dt>Weibo</dt>
+                    <dd><i class="fa fa{{if .Oauther.Weibo}}-check{{end}}-square-o"></i></dd>
+                    {{end}}
                 </dl>
             </div>
         </div>
@@ -153,6 +181,8 @@
                 <dl class="dl-horizontal admin-dl-horizontal">
                     <dt>Picture Service</dt>
                     <dd>{{.PictureService}}</dd>
+                    <dt>Disable Gravatar</dt>
+                    <dd><i class="fa fa{{if .DisableGravatar}}-check{{end}}-square-o"></i></dd>
                 </dl>
             </div>
         </div>

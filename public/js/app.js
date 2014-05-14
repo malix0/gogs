@@ -1,6 +1,4 @@
-var Gogits = {
-    "PageIsSignup": false
-};
+var Gogits = {};
 
 (function ($) {
     // extend jQuery ajax, set csrf token value
@@ -62,6 +60,12 @@ var Gogits = {
             var method = $(this).data('ajax-method') || 'get';
             var ajaxName = $(this).data('ajax-name');
             var data = {};
+
+            if (ajaxName.endsWith("preview")) {
+                data["mode"] = "gfm";
+                data["context"] = $(this).data('ajax-context');
+            }
+
             $('[data-ajax-rel=' + ajaxName + ']').each(function () {
                 var field = $(this).data("ajax-field");
                 var t = $(this).data("ajax-val");
@@ -159,12 +163,14 @@ var Gogits = {
         $tabs.tab("show");
         $tabs.find("li:eq(0) a").tab("show");
     };
+
     // fix dropdown inside click
     Gogits.initDropDown = function () {
         $('.dropdown-menu.no-propagation').on('click', function (e) {
             e.stopPropagation();
         });
     };
+
 
     // render markdown
     Gogits.renderMarkdown = function () {
@@ -192,6 +198,7 @@ var Gogits = {
         });
     };
 
+    // render code view
     Gogits.renderCodeView = function () {
         function selectRange($list, $select, $from) {
             $list.removeClass('active');
@@ -237,7 +244,7 @@ var Gogits = {
             }
         });
 
-        $(window).on('hashchange',function (e) {
+        $(window).on('hashchange', function (e) {
             var m = window.location.hash.match(/^#(L\d+)\-(L\d+)$/);
             var $list = $('.code-view ol.linenums > li');
             if (m) {
@@ -254,6 +261,43 @@ var Gogits = {
             }
         }).trigger('hashchange');
     };
+
+    // copy utils
+    Gogits.bindCopy = function (selector) {
+        if ($(selector).hasClass('js-copy-bind')) {
+            return;
+        }
+        $(selector).zclip({
+            path: "/js/ZeroClipboard.swf",
+            copy: function () {
+                var t = $(this).data("copy-val");
+                var to = $($(this).data("copy-from"));
+                var str = "";
+                if (t == "txt") {
+                    str = to.text();
+                }
+                if (t == 'val') {
+                    str = to.val();
+                }
+                if (t == 'html') {
+                    str = to.html();
+                }
+                return str;
+            },
+            afterCopy: function () {
+                var $this = $(this);
+                $this.tooltip('hide')
+                    .attr('data-original-title', 'Copied OK');
+                setTimeout(function () {
+                    $this.tooltip("show");
+                }, 200);
+                setTimeout(function () {
+                    $this.tooltip('hide')
+                        .attr('data-original-title', 'Copy to Clipboard');
+                }, 3000);
+            }
+        }).addClass("js-copy-bind");
+    }
 
 })(jQuery);
 
@@ -287,33 +331,8 @@ function initCore() {
     Gogits.renderCodeView();
 }
 
-function initRegister() {
-    $.getScript("/js/jquery.validate.min.js", function () {
-        Gogits.validateForm("#login-card", {
-            rules: {
-                "username": {
-                    required: true,
-                    maxlength: 30
-                },
-                "email": {
-                    required: true,
-                    email: true
-                },
-                "passwd": {
-                    required: true,
-                    minlength: 6,
-                    maxlength: 30
-                },
-                "re-passwd": {
-                    required: true,
-                    equalTo: "input[name=passwd]"
-                }
-            }
-        });
-    });
-}
-
 function initUserSetting() {
+    // ssh confirmation
     $('#ssh-keys .delete').confirmation({
         singleton: true,
         onConfirm: function (e, $this) {
@@ -326,6 +345,18 @@ function initUserSetting() {
             });
         }
     });
+
+    // profile form
+    (function () {
+        $('#user-setting-username').on("keyup", function () {
+            var $this = $(this);
+            if ($this.val() != $this.attr('title')) {
+                $this.next('.help-block').toggleShow();
+            } else {
+                $this.next('.help-block').toggleHide();
+            }
+        });
+    }())
 }
 
 function initRepository() {
@@ -334,7 +365,7 @@ function initRepository() {
         var $clone = $('.clone-group-btn');
         if ($clone.length) {
             var $url = $('.clone-group-url');
-            $clone.find('button[data-link]').on("click",function (e) {
+            $clone.find('button[data-link]').on("click", function (e) {
                 var $this = $(this);
                 if (!$this.hasClass('btn-primary')) {
                     $clone.find('.input-group-btn .btn-primary').removeClass('btn-primary').addClass("btn-default");
@@ -343,7 +374,10 @@ function initRepository() {
                     $clone.find('span.clone-url').text($this.data('link'));
                 }
             }).eq(0).trigger("click");
-            // todo copy to clipboard
+            $("#repo-clone").on("shown.bs.dropdown", function () {
+                Gogits.bindCopy("[data-init=copy]");
+            });
+            Gogits.bindCopy("[data-init=copy]:visible");
         }
     })();
 
@@ -352,7 +386,7 @@ function initRepository() {
         var $watch = $('#repo-watching'),
             watchLink = $watch.data("watch"),
             unwatchLink = $watch.data("unwatch");
-        $watch.on('click', '.to-watch',function () {
+        $watch.on('click', '.to-watch', function () {
             if ($watch.hasClass("watching")) {
                 return false;
             }
@@ -395,18 +429,45 @@ function initRepository() {
             $item.find(".bar .add").css("width", addPercent + "%");
         });
     }());
+
+    // repo setting form
+    (function () {
+        $('#repo-setting-name').on("keyup", function () {
+            var $this = $(this);
+            if ($this.val() != $this.attr('title')) {
+                $this.next('.help-block').toggleShow();
+            } else {
+                $this.next('.help-block').toggleHide();
+            }
+        });
+    }())
 }
 
 function initInstall() {
     // database type change
     (function () {
+        var mysql_default = '127.0.0.1:3306'
+        var postgres_default = '127.0.0.1:5432'
+
         $('#install-database').on("change", function () {
             var val = $(this).val();
-            if (val != "sqlite") {
+            if (val != "SQLite3") {
                 $('.server-sql').show();
                 $('.sqlite-setting').addClass("hide");
-                if (val == "pgsql") {
+                if (val == "PostgreSQL") {
                     $('.pgsql-setting').removeClass("hide");
+
+                    // Change the host value to the Postgres default, but only
+                    // if the user hasn't already changed it from the MySQL
+                    // default.
+                    if ($('#database-host').val() == mysql_default) {
+                        $('#database-host').val(postgres_default);
+                    }
+                } else if (val == 'MySQL') {
+                    $('.pgsql-setting').addClass("hide");
+                    if ($('#database-host').val() == postgres_default) {
+                        $('#database-host').val(mysql_default);
+                    }
                 } else {
                     $('.pgsql-setting').addClass("hide");
                 }
@@ -464,26 +525,111 @@ function initIssue() {
     (function () {
         $('[data-ajax-name=issue-preview]').on("click", function () {
             var $this = $(this);
+            $this.toggleAjax(function (resp) {
+                $($this.data("preview")).html(resp);
+            })
+        });
+        $('.issue-write a[data-toggle]').on("click", function () {
+            $('.issue-preview-content').html("loading...");
+        });
+    }());
+
+    // assignee
+    var is_issue_bar = $('.issue-bar').length > 0;
+    var $a = $('.assignee');
+    if($a.data("assigned") > 0){
+        $('.clear-assignee').toggleShow();
+    }
+    $('.assignee', '#issue').on('click', 'li', function () {
+        var uid = $(this).data("uid");
+        if(is_issue_bar){
+            var assignee = $a.data("assigned");
+            if(uid != assignee){
+                $.post($a.data("ajax"), {
+                    issue: $('#issue').data("id"),
+                    assigneeid: uid
+                }, function (json) {
+                    if (json.ok) {
+                        window.location.reload();
+                    }
+                })
+            }
+            return;
+        }
+        $('#assignee').val(uid);
+        if (uid > 0) {
+            $('.clear-assignee').toggleShow();
+            $('#assigned').text($(this).find("strong").text())
+        } else {
+            $('.clear-assignee').toggleHide();
+            $('#assigned').text($('#assigned').data("no-assigned"));
+        }
+    });
+
+}
+
+function initRelease() {
+// release new ajax preview
+    (function () {
+        $('[data-ajax-name=release-preview]').on("click", function () {
+            var $this = $(this);
             $this.toggleAjax(function (json) {
                 if (json.ok) {
                     $($this.data("preview")).html(json.content);
                 }
             })
         });
-        $('.issue-write a[data-toggle]').on("click", function () {
-            $('.issue-preview-content').html("loading...");
+        $('.release-write a[data-toggle]').on("click", function () {
+            $('.release-preview-content').html("loading...");
         });
-    }())
+    }());
 
+    // release new target selection
+    (function () {
+        $('#release-new-target-branch-list').on('click', 'a', function () {
+            $('#tag-target').val($(this).text());
+            $('#release-new-target-name').text(" " + $(this).text());
+        });
+    }());
+}
+
+function initRepoSetting() {
+    // repo member add
+    $('#repo-collaborator').on('keyup', function () {
+        var $this = $(this);
+        if (!$this.val()) {
+            $this.next().toggleHide();
+            return;
+        }
+        $.ajax({
+            url: '/api/v1/users/search?q=' + $this.val(),
+            dataType: "json",
+            success: function (json) {
+                if (json.ok && json.data.length) {
+                    var html = '';
+                    $.each(json.data, function (i, item) {
+                        html += '<li><img src="' + item.avatar + '">' + item.username + '</li>';
+                    });
+                    $this.next().toggleShow();
+                    $this.next().find('ul').html(html);
+                } else {
+                    $this.next().toggleHide();
+                }
+            }
+        });
+    }).on('focus', function () {
+        if (!$(this).val()) {
+            $(this).next().toggleHide();
+        }
+    }).next().on("click", 'li', function () {
+        $('#repo-collaborator').val($(this).text());
+    });
 }
 
 (function ($) {
     $(function () {
         initCore();
         var body = $("#body");
-        if (body.data("page") == "user-signup") {
-            initRegister();
-        }
         if (body.data("page") == "user") {
             initUserSetting();
         }
@@ -496,5 +642,15 @@ function initIssue() {
         if ($('#issue').length) {
             initIssue();
         }
+        if ($('#release').length) {
+            initRelease();
+        }
+        if ($('#repo-setting-container').length) {
+            initRepoSetting();
+        }
     });
 })(jQuery);
+
+String.prototype.endsWith = function(suffix) {
+    return this.indexOf(suffix, this.length - suffix.length) !== -1;
+};

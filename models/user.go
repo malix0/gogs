@@ -5,6 +5,7 @@
 package models
 
 import (
+	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -12,8 +13,6 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/dchest/scrypt"
 
 	"github.com/gogits/git"
 
@@ -27,19 +26,15 @@ const (
 	UT_ORGANIZATION
 )
 
-// Login types.
-const (
-	LT_PLAIN = iota + 1
-	LT_LDAP
-)
-
 var (
-	ErrUserOwnRepos     = errors.New("User still have ownership of repositories")
-	ErrUserAlreadyExist = errors.New("User already exist")
-	ErrUserNotExist     = errors.New("User does not exist")
-	ErrEmailAlreadyUsed = errors.New("E-mail already used")
-	ErrUserNameIllegal  = errors.New("User name contains illegal characters")
-	ErrKeyNotExist      = errors.New("Public key does not exist")
+	ErrUserOwnRepos          = errors.New("User still have ownership of repositories")
+	ErrUserAlreadyExist      = errors.New("User already exist")
+	ErrUserNotExist          = errors.New("User does not exist")
+	ErrEmailAlreadyUsed      = errors.New("E-mail already used")
+	ErrUserNameIllegal       = errors.New("User name contains illegal characters")
+	ErrLoginSourceNotExist   = errors.New("Login source does not exist")
+	ErrLoginSourceNotActived = errors.New("Login source is not actived")
+	ErrUnsupportedLoginType  = errors.New("Login source is unknow")
 )
 
 // User represents the object of individual and member of organization.
@@ -47,9 +42,12 @@ type User struct {
 	Id            int64
 	LowerName     string `xorm:"unique not null"`
 	Name          string `xorm:"unique not null"`
+	FullName      string
 	Email         string `xorm:"unique not null"`
 	Passwd        string `xorm:"not null"`
 	LoginType     int
+	LoginSource   int64 `xorm:"not null default 0"`
+	LoginName     string
 	Type          int
 	NumFollowers  int
 	NumFollowings int
@@ -62,6 +60,7 @@ type User struct {
 	IsActive      bool
 	IsAdmin       bool
 	Rands         string    `xorm:"VARCHAR(10)"`
+	Salt          string    `xorm:"VARCHAR(10)"`
 	Created       time.Time `xorm:"created"`
 	Updated       time.Time `xorm:"updated"`
 }
@@ -73,10 +72,12 @@ func (user *User) HomeLink() string {
 
 // AvatarLink returns the user gravatar link.
 func (user *User) AvatarLink() string {
-	if base.Service.EnableCacheAvatar {
+	if base.DisableGravatar {
+		return "/img/avatar_default.jpg"
+	} else if base.Service.EnableCacheAvatar {
 		return "/avatar/" + user.Avatar
 	}
-	return "http://1.gravatar.com/avatar/" + user.Avatar
+	return "//1.gravatar.com/avatar/" + user.Avatar
 }
 
 // NewGitSig generates and returns the signature of given user.
@@ -89,10 +90,9 @@ func (user *User) NewGitSig() *git.Signature {
 }
 
 // EncodePasswd encodes password to safe format.
-func (user *User) EncodePasswd() error {
-	newPasswd, err := scrypt.Key([]byte(user.Passwd), []byte(base.SecretKey), 16384, 8, 1, 64)
+func (user *User) EncodePasswd() {
+	newPasswd := base.PBKDF2([]byte(user.Passwd), []byte(user.Salt), 10000, 50, sha256.New)
 	user.Passwd = fmt.Sprintf("%x", newPasswd)
-	return err
 }
 
 // Member represents user is member of organization.
@@ -105,11 +105,17 @@ type Member struct {
 // IsUserExist checks if given user name exist,
 // the user name should be noncased unique.
 func IsUserExist(name string) (bool, error) {
+	if len(name) == 0 {
+		return false, nil
+	}
 	return orm.Get(&User{LowerName: strings.ToLower(name)})
 }
 
 // IsEmailUsed returns true if the e-mail has been used.
 func IsEmailUsed(email string) (bool, error) {
+	if len(email) == 0 {
+		return false, nil
+	}
 	return orm.Get(&User{Email: email})
 }
 
@@ -120,6 +126,7 @@ func GetUserSalt() string {
 
 // RegisterUser creates record of a new user.
 func RegisterUser(user *User) (*User, error) {
+
 	if !IsLegalName(user.Name) {
 		return nil, ErrUserNameIllegal
 	}
@@ -142,9 +149,9 @@ func RegisterUser(user *User) (*User, error) {
 	user.Avatar = base.EncodeMd5(user.Email)
 	user.AvatarEmail = user.Email
 	user.Rands = GetUserSalt()
-	if err = user.EncodePasswd(); err != nil {
-		return nil, err
-	} else if _, err = orm.Insert(user); err != nil {
+	user.Salt = GetUserSalt()
+	user.EncodePasswd()
+	if _, err = orm.Insert(user); err != nil {
 		return nil, err
 	} else if err = os.MkdirAll(UserPath(user.Name), os.ModePerm); err != nil {
 		if _, err := orm.Id(user.Id).Delete(&User{}); err != nil {
@@ -203,8 +210,65 @@ func VerifyUserActiveCode(code string) (user *User) {
 	return nil
 }
 
+// ChangeUserName changes all corresponding setting from old user name to new one.
+func ChangeUserName(user *User, newUserName string) (err error) {
+	newUserName = strings.ToLower(newUserName)
+
+	// Update accesses of user.
+	accesses := make([]Access, 0, 10)
+	if err = orm.Find(&accesses, &Access{UserName: user.LowerName}); err != nil {
+		return err
+	}
+
+	sess := orm.NewSession()
+	defer sess.Close()
+	if err = sess.Begin(); err != nil {
+		return err
+	}
+
+	for i := range accesses {
+		accesses[i].UserName = newUserName
+		if strings.HasPrefix(accesses[i].RepoName, user.LowerName+"/") {
+			accesses[i].RepoName = strings.Replace(accesses[i].RepoName, user.LowerName, newUserName, 1)
+		}
+		if err = UpdateAccessWithSession(sess, &accesses[i]); err != nil {
+			return err
+		}
+	}
+
+	repos, err := GetRepositories(user, true)
+	if err != nil {
+		return err
+	}
+	for i := range repos {
+		accesses = make([]Access, 0, 10)
+		// Update accesses of user repository.
+		if err = orm.Find(&accesses, &Access{RepoName: user.LowerName + "/" + repos[i].LowerName}); err != nil {
+			return err
+		}
+
+		for j := range accesses {
+			accesses[j].UserName = newUserName
+			accesses[j].RepoName = newUserName + "/" + repos[i].LowerName
+			if err = UpdateAccessWithSession(sess, &accesses[j]); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Change user directory name.
+	if err = os.Rename(UserPath(user.LowerName), UserPath(newUserName)); err != nil {
+		sess.Rollback()
+		return err
+	}
+
+	return sess.Commit()
+}
+
 // UpdateUser updates user's information.
 func UpdateUser(user *User) (err error) {
+	user.LowerName = strings.ToLower(user.Name)
+
 	if len(user.Location) > 255 {
 		user.Location = user.Location[:255]
 	}
@@ -228,18 +292,38 @@ func DeleteUser(user *User) error {
 
 	// TODO: check issues, other repos' commits
 
+	// Delete all followers.
+	if _, err = orm.Delete(&Follow{FollowId: user.Id}); err != nil {
+		return err
+	}
+
+	// Delete oauth2.
+	if _, err = orm.Delete(&Oauth2{Uid: user.Id}); err != nil {
+		return err
+	}
+
 	// Delete all feeds.
 	if _, err = orm.Delete(&Action{UserId: user.Id}); err != nil {
 		return err
 	}
 
+	// Delete all watches.
+	if _, err = orm.Delete(&Watch{UserId: user.Id}); err != nil {
+		return err
+	}
+
+	// Delete all accesses.
+	if _, err = orm.Delete(&Access{UserName: user.LowerName}); err != nil {
+		return err
+	}
+
 	// Delete all SSH keys.
-	keys := make([]PublicKey, 0, 10)
+	keys := make([]*PublicKey, 0, 10)
 	if err = orm.Find(&keys, &PublicKey{OwnerId: user.Id}); err != nil {
 		return err
 	}
 	for _, key := range keys {
-		if err = DeletePublicKey(&key); err != nil {
+		if err = DeletePublicKey(key); err != nil {
 			return err
 		}
 	}
@@ -250,7 +334,6 @@ func DeleteUser(user *User) error {
 	}
 
 	_, err = orm.Delete(user)
-	// TODO: delete and update follower information.
 	return err
 }
 
@@ -300,20 +383,64 @@ func GetUserByName(name string) (*User, error) {
 	return user, nil
 }
 
-// LoginUserPlain validates user by raw user name and password.
-func LoginUserPlain(name, passwd string) (*User, error) {
-	user := User{LowerName: strings.ToLower(name), Passwd: passwd}
-	if err := user.EncodePasswd(); err != nil {
-		return nil, err
+// GetUserEmailsByNames returns a slice of e-mails corresponds to names.
+func GetUserEmailsByNames(names []string) []string {
+	mails := make([]string, 0, len(names))
+	for _, name := range names {
+		u, err := GetUserByName(name)
+		if err != nil {
+			continue
+		}
+		mails = append(mails, u.Email)
 	}
+	return mails
+}
 
-	has, err := orm.Get(&user)
+// GetUserIdsByNames returns a slice of ids corresponds to names.
+func GetUserIdsByNames(names []string) []int64 {
+	ids := make([]int64, 0, len(names))
+	for _, name := range names {
+		u, err := GetUserByName(name)
+		if err != nil {
+			continue
+		}
+		ids = append(ids, u.Id)
+	}
+	return ids
+}
+
+// GetUserByEmail returns the user object by given e-mail if exists.
+func GetUserByEmail(email string) (*User, error) {
+	if len(email) == 0 {
+		return nil, ErrUserNotExist
+	}
+	user := &User{Email: strings.ToLower(email)}
+	has, err := orm.Get(user)
 	if err != nil {
 		return nil, err
 	} else if !has {
-		err = ErrUserNotExist
+		return nil, ErrUserNotExist
 	}
-	return &user, err
+	return user, nil
+}
+
+// SearchUserByName returns given number of users whose name contains keyword.
+func SearchUserByName(key string, limit int) (us []*User, err error) {
+	// Prevent SQL inject.
+	key = strings.TrimSpace(key)
+	if len(key) == 0 {
+		return us, nil
+	}
+
+	key = strings.Split(key, " ")[0]
+	if len(key) == 0 {
+		return us, nil
+	}
+	key = strings.ToLower(key)
+
+	us = make([]*User, 0, limit)
+	err = orm.Limit(limit).Where("lower_name like '%" + key + "%'").Find(&us)
+	return us, err
 }
 
 // Follow is connection request for receiving user notifycation.

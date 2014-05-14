@@ -5,6 +5,7 @@
 package routers
 
 import (
+	"github.com/gogits/gogs/models"
 	"github.com/gogits/gogs/modules/base"
 	"github.com/gogits/gogs/modules/middleware"
 	"github.com/gogits/gogs/routers/user"
@@ -23,6 +24,21 @@ func Home(ctx *middleware.Context) {
 		return
 	}
 
+	// Show recent updated repositoires for new visiters.
+	repos, err := models.GetRecentUpdatedRepositories()
+	if err != nil {
+		ctx.Handle(500, "dashboard.Home(GetRecentUpdatedRepositories)", err)
+		return
+	}
+
+	for _, repo := range repos {
+		repo.Owner, err = models.GetUserById(repo.OwnerId)
+		if err != nil {
+			ctx.Handle(500, "dashboard.Home(GetUserById)", err)
+			return
+		}
+	}
+	ctx.Data["Repos"] = repos
 	ctx.Data["PageIsHome"] = true
 	ctx.HTML(200, "home")
 }

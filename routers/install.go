@@ -7,18 +7,22 @@ package routers
 import (
 	"errors"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/Unknwon/goconfig"
 	"github.com/go-martini/martini"
-	"github.com/lunny/xorm"
+	"github.com/go-xorm/xorm"
+	qlog "github.com/qiniu/log"
 
 	"github.com/gogits/gogs/models"
 	"github.com/gogits/gogs/modules/auth"
 	"github.com/gogits/gogs/modules/base"
+	"github.com/gogits/gogs/modules/cron"
 	"github.com/gogits/gogs/modules/log"
 	"github.com/gogits/gogs/modules/mailer"
 	"github.com/gogits/gogs/modules/middleware"
+	"github.com/gogits/gogs/modules/social"
 )
 
 // Check run mode(Default of martini is Dev).
@@ -26,10 +30,16 @@ func checkRunMode() {
 	switch base.Cfg.MustValue("", "RUN_MODE") {
 	case "prod":
 		martini.Env = martini.Prod
+		base.ProdMode = true
 	case "test":
 		martini.Env = martini.Test
 	}
 	log.Info("Run Mode: %s", strings.Title(martini.Env))
+}
+
+func NewServices() {
+	base.NewBaseServices()
+	social.NewOauthService()
 }
 
 // GlobalInit is for global configuration reload-able.
@@ -39,17 +49,24 @@ func GlobalInit() {
 	models.LoadModelsConfig()
 	models.LoadRepoConfig()
 	models.NewRepoContext()
+	NewServices()
 
 	if base.InstallLock {
 		if err := models.NewEngine(); err != nil {
-			log.Error("%v", err)
-			os.Exit(2)
+			qlog.Fatal(err)
 		}
 
 		models.HasEngine = true
+		if models.EnableSQLite3 {
+			log.Info("SQLite3 Enabled")
+		}
+		cron.NewCronContext()
 	}
-	base.NewServices()
 	checkRunMode()
+}
+
+func renderDbOption(ctx *middleware.Context) {
+	ctx.Data["DbOptions"] = []string{"MySQL", "PostgreSQL", "SQLite3"}
 }
 
 func Install(ctx *middleware.Context, form auth.InstallForm) {
@@ -61,50 +78,72 @@ func Install(ctx *middleware.Context, form auth.InstallForm) {
 	ctx.Data["Title"] = "Install"
 	ctx.Data["PageIsInstall"] = true
 
-	if ctx.Req.Method == "GET" {
-		// Get and assign value to install form.
-		if len(form.Host) == 0 {
-			form.Host = models.DbCfg.Host
-		}
-		if len(form.User) == 0 {
-			form.User = models.DbCfg.User
-		}
-		if len(form.Passwd) == 0 {
-			form.Passwd = models.DbCfg.Pwd
-		}
-		if len(form.DatabaseName) == 0 {
-			form.DatabaseName = models.DbCfg.Name
-		}
-		if len(form.DatabasePath) == 0 {
-			form.DatabasePath = models.DbCfg.Path
-		}
+	// Get and assign values to install form.
+	if len(form.Host) == 0 {
+		form.Host = models.DbCfg.Host
+	}
+	if len(form.User) == 0 {
+		form.User = models.DbCfg.User
+	}
+	if len(form.Passwd) == 0 {
+		form.Passwd = models.DbCfg.Pwd
+	}
+	if len(form.DatabaseName) == 0 {
+		form.DatabaseName = models.DbCfg.Name
+	}
+	if len(form.DatabasePath) == 0 {
+		form.DatabasePath = models.DbCfg.Path
+	}
 
-		if len(form.RepoRootPath) == 0 {
-			form.RepoRootPath = base.RepoRootPath
-		}
-		if len(form.RunUser) == 0 {
-			form.RunUser = base.RunUser
-		}
-		if len(form.Domain) == 0 {
-			form.Domain = base.Domain
-		}
-		if len(form.AppUrl) == 0 {
-			form.AppUrl = base.AppUrl
-		}
+	if len(form.RepoRootPath) == 0 {
+		form.RepoRootPath = base.RepoRootPath
+	}
+	if len(form.RunUser) == 0 {
+		form.RunUser = base.RunUser
+	}
+	if len(form.Domain) == 0 {
+		form.Domain = base.Domain
+	}
+	if len(form.AppUrl) == 0 {
+		form.AppUrl = base.AppUrl
+	}
 
-		auth.AssignForm(form, ctx.Data)
-		ctx.HTML(200, "install")
+	renderDbOption(ctx)
+	curDbOp := ""
+	if models.EnableSQLite3 {
+		curDbOp = "SQLite3" // Default when enabled.
+	}
+	ctx.Data["CurDbOption"] = curDbOp
+
+	auth.AssignForm(form, ctx.Data)
+	ctx.HTML(200, "install")
+}
+
+func InstallPost(ctx *middleware.Context, form auth.InstallForm) {
+	if base.InstallLock {
+		ctx.Handle(404, "install.Install", errors.New("Installation is prohibited"))
 		return
 	}
+
+	ctx.Data["Title"] = "Install"
+	ctx.Data["PageIsInstall"] = true
+
+	renderDbOption(ctx)
+	ctx.Data["CurDbOption"] = form.Database
 
 	if ctx.HasError() {
 		ctx.HTML(200, "install")
 		return
 	}
 
+	if _, err := exec.LookPath("git"); err != nil {
+		ctx.RenderWithErr("Fail to test 'git' command: "+err.Error(), "install", &form)
+		return
+	}
+
 	// Pass basic check, now test configuration.
 	// Test database setting.
-	dbTypes := map[string]string{"mysql": "mysql", "pgsql": "postgres", "sqlite": "sqlite3"}
+	dbTypes := map[string]string{"MySQL": "mysql", "PostgreSQL": "postgres", "SQLite3": "sqlite3"}
 	models.DbCfg.Type = dbTypes[form.Database]
 	models.DbCfg.Host = form.Host
 	models.DbCfg.User = form.User
@@ -118,7 +157,7 @@ func Install(ctx *middleware.Context, form auth.InstallForm) {
 	if err := models.NewTestEngine(x); err != nil {
 		if strings.Contains(err.Error(), `Unknown database type: sqlite3`) {
 			ctx.RenderWithErr("Your release version does not support SQLite3, please download the official binary version "+
-				"from https://github.com/gogits/gogs/wiki/Install-from-binary, NOT the gobuild version.", "install", &form)
+				"from http://gogs.io/docs/installation/install_from_binary.md, NOT the gobuild version.", "install", &form)
 		} else {
 			ctx.RenderWithErr("Database setting is not correct: "+err.Error(), "install", &form)
 		}
@@ -132,9 +171,9 @@ func Install(ctx *middleware.Context, form auth.InstallForm) {
 	}
 
 	// Check run user.
-	curUser := os.Getenv("USERNAME")
+	curUser := os.Getenv("USER")
 	if len(curUser) == 0 {
-		curUser = os.Getenv("USER")
+		curUser = os.Getenv("USERNAME")
 	}
 	// Does not check run user when the install lock is off.
 	if form.RunUser != curUser {
@@ -182,6 +221,7 @@ func Install(ctx *middleware.Context, form auth.InstallForm) {
 	if _, err := models.RegisterUser(&models.User{Name: form.AdminName, Email: form.AdminEmail, Passwd: form.AdminPasswd,
 		IsAdmin: true, IsActive: true}); err != nil {
 		if err != models.ErrUserAlreadyExist {
+			base.InstallLock = false
 			ctx.RenderWithErr("Admin account setting is invalid: "+err.Error(), "install", &form)
 			return
 		}
@@ -189,5 +229,6 @@ func Install(ctx *middleware.Context, form auth.InstallForm) {
 	}
 
 	log.Info("First-time run install finished!")
+	ctx.Flash.Success("Welcome! We're glad that you choose Gogs, have fun and take care.")
 	ctx.Redirect("/user/login")
 }

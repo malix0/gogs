@@ -11,10 +11,9 @@ import (
 
 	"github.com/go-martini/martini"
 
-	"github.com/gogits/binding"
-
 	"github.com/gogits/gogs/modules/base"
 	"github.com/gogits/gogs/modules/log"
+	"github.com/gogits/gogs/modules/middleware/binding"
 )
 
 // Web form interface.
@@ -23,10 +22,12 @@ type Form interface {
 }
 
 type RegisterForm struct {
-	UserName     string `form:"username" binding:"Required;AlphaDash;MaxSize(30)"`
+	UserName     string `form:"username" binding:"Required;AlphaDashDot;MaxSize(30)"`
 	Email        string `form:"email" binding:"Required;Email;MaxSize(50)"`
 	Password     string `form:"passwd" binding:"Required;MinSize(6);MaxSize(30)"`
 	RetypePasswd string `form:"retypepasswd"`
+	LoginType    string `form:"logintype"`
+	LoginName    string `form:"loginname"`
 }
 
 func (f *RegisterForm) Name(field string) string {
@@ -39,29 +40,15 @@ func (f *RegisterForm) Name(field string) string {
 	return names[field]
 }
 
-func (f *RegisterForm) Validate(errors *binding.Errors, req *http.Request, context martini.Context) {
-	if req.Method == "GET" || errors.Count() == 0 {
-		return
-	}
-
-	data := context.Get(reflect.TypeOf(base.TmplData{})).Interface().(base.TmplData)
-	data["HasError"] = true
-	AssignForm(f, data)
-
-	if len(errors.Overall) > 0 {
-		for _, err := range errors.Overall {
-			log.Error("RegisterForm.Validate: %v", err)
-		}
-		return
-	}
-
-	validate(errors, data, f)
+func (f *RegisterForm) Validate(errs *binding.Errors, req *http.Request, ctx martini.Context) {
+	data := ctx.Get(reflect.TypeOf(base.TmplData{})).Interface().(base.TmplData)
+	validate(errs, data, f)
 }
 
 type LogInForm struct {
-	UserName string `form:"username" binding:"Required;AlphaDash;MaxSize(30)"`
+	UserName string `form:"username" binding:"Required;MaxSize(35)"`
 	Password string `form:"passwd" binding:"Required;MinSize(6);MaxSize(30)"`
-	Remember string `form:"remember"`
+	Remember bool   `form:"remember"`
 }
 
 func (f *LogInForm) Name(field string) string {
@@ -72,26 +59,12 @@ func (f *LogInForm) Name(field string) string {
 	return names[field]
 }
 
-func (f *LogInForm) Validate(errors *binding.Errors, req *http.Request, context martini.Context) {
-	if req.Method == "GET" || errors.Count() == 0 {
-		return
-	}
-
-	data := context.Get(reflect.TypeOf(base.TmplData{})).Interface().(base.TmplData)
-	data["HasError"] = true
-	AssignForm(f, data)
-
-	if len(errors.Overall) > 0 {
-		for _, err := range errors.Overall {
-			log.Error("LogInForm.Validate: %v", err)
-		}
-		return
-	}
-
-	validate(errors, data, f)
+func (f *LogInForm) Validate(errs *binding.Errors, req *http.Request, ctx martini.Context) {
+	data := ctx.Get(reflect.TypeOf(base.TmplData{})).Interface().(base.TmplData)
+	validate(errs, data, f)
 }
 
-func getMinMaxSize(field reflect.StructField) string {
+func GetMinMaxSize(field reflect.StructField) string {
 	for _, rule := range strings.Split(field.Tag.Get("binding"), ";") {
 		if strings.HasPrefix(rule, "MinSize(") || strings.HasPrefix(rule, "MaxSize(") {
 			return rule[8 : len(rule)-1]
@@ -100,9 +73,21 @@ func getMinMaxSize(field reflect.StructField) string {
 	return ""
 }
 
-func validate(errors *binding.Errors, data base.TmplData, form Form) {
-	typ := reflect.TypeOf(form)
-	val := reflect.ValueOf(form)
+func validate(errs *binding.Errors, data base.TmplData, f Form) {
+	if errs.Count() == 0 {
+		return
+	} else if len(errs.Overall) > 0 {
+		for _, err := range errs.Overall {
+			log.Error("%s: %v", reflect.TypeOf(f), err)
+		}
+		return
+	}
+
+	data["HasError"] = true
+	AssignForm(f, data)
+
+	typ := reflect.TypeOf(f)
+	val := reflect.ValueOf(f)
 
 	if typ.Kind() == reflect.Ptr {
 		typ = typ.Elem()
@@ -118,19 +103,23 @@ func validate(errors *binding.Errors, data base.TmplData, form Form) {
 			continue
 		}
 
-		if err, ok := errors.Fields[field.Name]; ok {
+		if err, ok := errs.Fields[field.Name]; ok {
 			data["Err_"+field.Name] = true
 			switch err {
-			case binding.RequireError:
-				data["ErrorMsg"] = form.Name(field.Name) + " cannot be empty"
-			case binding.AlphaDashError:
-				data["ErrorMsg"] = form.Name(field.Name) + " must be valid alpha or numeric or dash(-_) characters"
-			case binding.MinSizeError:
-				data["ErrorMsg"] = form.Name(field.Name) + " must contain at least " + getMinMaxSize(field) + " characters"
-			case binding.MaxSizeError:
-				data["ErrorMsg"] = form.Name(field.Name) + " must contain at most " + getMinMaxSize(field) + " characters"
-			case binding.EmailError:
-				data["ErrorMsg"] = form.Name(field.Name) + " is not valid"
+			case binding.BindingRequireError:
+				data["ErrorMsg"] = f.Name(field.Name) + " cannot be empty"
+			case binding.BindingAlphaDashError:
+				data["ErrorMsg"] = f.Name(field.Name) + " must be valid alpha or numeric or dash(-_) characters"
+			case binding.BindingAlphaDashDotError:
+				data["ErrorMsg"] = f.Name(field.Name) + " must be valid alpha or numeric or dash(-_) or dot characters"
+			case binding.BindingMinSizeError:
+				data["ErrorMsg"] = f.Name(field.Name) + " must contain at least " + GetMinMaxSize(field) + " characters"
+			case binding.BindingMaxSizeError:
+				data["ErrorMsg"] = f.Name(field.Name) + " must contain at most " + GetMinMaxSize(field) + " characters"
+			case binding.BindingEmailError:
+				data["ErrorMsg"] = f.Name(field.Name) + " is not a valid e-mail address"
+			case binding.BindingUrlError:
+				data["ErrorMsg"] = f.Name(field.Name) + " is not a valid URL"
 			default:
 				data["ErrorMsg"] = "Unknown error: " + err
 			}
@@ -174,7 +163,7 @@ type InstallForm struct {
 	RunUser         string `form:"run_user"`
 	Domain          string `form:"domain"`
 	AppUrl          string `form:"app_url"`
-	AdminName       string `form:"admin_name" binding:"Required"`
+	AdminName       string `form:"admin_name" binding:"Required;AlphaDashDot;MaxSize(30)"`
 	AdminPasswd     string `form:"admin_pwd" binding:"Required;MinSize(6);MaxSize(30)"`
 	AdminEmail      string `form:"admin_email" binding:"Required;Email;MaxSize(50)"`
 	SmtpHost        string `form:"smtp_host"`
@@ -195,20 +184,6 @@ func (f *InstallForm) Name(field string) string {
 }
 
 func (f *InstallForm) Validate(errors *binding.Errors, req *http.Request, context martini.Context) {
-	if req.Method == "GET" || errors.Count() == 0 {
-		return
-	}
-
 	data := context.Get(reflect.TypeOf(base.TmplData{})).Interface().(base.TmplData)
-	data["HasError"] = true
-	AssignForm(f, data)
-
-	if len(errors.Overall) > 0 {
-		for _, err := range errors.Overall {
-			log.Error("InstallForm.Validate: %v", err)
-		}
-		return
-	}
-
 	validate(errors, data, f)
 }

@@ -67,22 +67,20 @@ html, body {
     color: #EEE;
     font-size: 100%;
     height: 46px;
+    margin-top: 3px;
 }
 
 #nav-logo {
     padding-left: 0;
     padding-right: 0;
     margin-right: 10px;
+    margin-top: 0;
 }
 
 .nav-item:hover,
 .nav-item:focus {
     color: #fff;
     text-decoration: none;
-}
-
-.nav-item.navbar-right {
-    margin-top: 3px;
 }
 
 .nav-item.navbar-btn {
@@ -94,6 +92,30 @@ html, body {
 
 .nav-item.navbar-right .fa {
     margin: 0;
+}
+
+#nav-search-form {
+    width: 300px;
+    margin-top: 0;
+}
+
+#nav-search-form button {
+    margin-top: 0;
+    background-image: none;
+    background-color: #F6F6F6;
+}
+
+#nav-search-form input[type=search] {
+    background-color: #F6F6F6;
+    border-bottom-right-radius: 3px;
+    border-top-right-radius: 3px;
+    -webkit-transition: width linear .25s;
+}
+
+#nav-search-form input[type=search]:focus {
+    background-color: #FFF;
+    border-color: #D9D9D9;
+    width: 320px;
 }
 
 /* gogits nav item active status */
@@ -239,14 +261,40 @@ html, body {
 }
 
 #social-login {
-    margin-top: 30px;
-    padding-top: 20px;
+    margin-top: 40px;
+    padding-top: 40px;
     border-top: 1px solid #ccc;
+    position: relative;
 }
 
 #social-login .btn {
     float: none;
-    margin: auto;
+    margin: auto 4px;
+}
+
+#social-login .btn .fa {
+    margin-left: 0;
+    margin-right: 4px;
+}
+
+#social-login .btn span {
+    display: inline-block;
+    vertical-align: top;
+    font-size: 16px;
+    margin-top: 5px;
+}
+
+#social-login h4 {
+    position: absolute;
+    top: -20px;
+    width: 100%;
+    text-align: center;
+    background-color: transparent;
+}
+
+#social-login h4 span {
+    background-color: #FFF;
+    padding: 0 12px;
 }
 
 /* gogs-user-profile */
@@ -263,11 +311,18 @@ html, body {
     border-radius: 2px;
 }
 
-#user-name {
-    margin-top: 20px;
+#user-name, #user-full-name {
     font-size: 1.6em;
     font-weight: bold;
+}
+
+#user-name {
     margin-bottom: 20px;
+    margin-top: 10px;
+}
+
+#user-full-name {
+    margin-top: 20px;
 }
 
 #user-profile .profile-info .list-group-item {
@@ -291,6 +346,22 @@ html, body {
     padding-right: 18px;
 }
 
+#user-profile .profile-rel .col-md-6 {
+    text-align: center;
+    padding-bottom: 12px;
+}
+
+#user-profile .profile-rel strong {
+    font-size: 24px;
+    color: #444;
+    display: block;
+}
+
+#user-profile .profile-rel p {
+    margin-right: 0;
+    color: #888;
+}
+
 #user-activity .tab-pane {
     padding: 20px;
 }
@@ -309,7 +380,26 @@ html, body {
     height: 8em;
 }
 
+#repo-import-auth {
+    width: 100%;
+    margin-top: 48px;
+    box-sizing: border-box;
+}
+
+#repo-import-auth .form-group {
+    box-sizing: border-box;
+    margin-left: 0;
+    margin-right: 0;
+}
+
 /* gogits user setting */
+
+#user-setting-nav.repo-setting-nav {
+    background-color: #FFF;
+    border: 1px solid #CCC;
+    padding: 0;
+    padding-top: 10px;
+}
 
 #user-setting-nav > h4, #user-setting-container > h4, #user-setting-container > div > h4,
 #ssh-keys > h4, #user-delete > h4, #repo-setting-container .tab-pane > h4 {
@@ -320,13 +410,14 @@ html, body {
 
 #user-setting-nav .list-group .list-group-item a {
     margin-left: 0;
-    padding: .6em;
+    padding: .6em 1.2em;
     font-size: 14px;
     color: #3B73AF;
 }
 
 #user-setting-nav .list-group .list-group-item {
     background-color: transparent;
+    margin-bottom: .6em;
 }
 
 #user-setting-nav .list-group .list-group-item-success a {
@@ -355,8 +446,74 @@ html, body {
     border-left: 4px solid #DD4B39;
 }
 
+#repo-setting-container {
+    padding-right: 0;
+}
+
 #repo-setting-container .form-horizontal label {
     line-height: 30px;
+}
+
+#repo-collab-list li.collab {
+    margin-bottom: .6em;
+}
+
+#repo-collab-list .avatar {
+    margin-right: 1em;
+    width: 40px;
+}
+
+#repo-collab-list a.member {
+    color: #444;
+}
+
+#repo-collab-list .remove-collab, #repo-hooks-list .remove-hook {
+    color: #DD4B39;
+}
+
+#repo-collab-form .dropdown-menu {
+    margin-left: 15px;
+    margin-top: 4px;
+    padding: 0;
+}
+
+#repo-collab-form .dropdown-menu li {
+    padding: 0 1em;
+    line-height: 36px;
+    cursor: pointer;
+    font-weight: bold;
+}
+
+#repo-collab-form .dropdown-menu li:hover {
+    background-color: #e8f0ff;
+}
+
+#repo-collab-form .dropdown-menu img {
+    width: 28px;
+    height: 28px;
+    margin-right: 1em;
+    vertical-align: middle;
+    margin-top: -3px;
+}
+
+#repo-collab-form .dropdown-menu ul {
+    margin-bottom: 0;
+}
+
+#repo-hooks-list li {
+    line-height: 40px;
+    border-top: 1px solid #DDD;
+    height: 40px;
+}
+
+#repo-hooks-list .link {
+    display: inline-block;
+    max-width: 360px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    height: 40px;
+    line-height: 40px;
+    white-space: nowrap;
 }
 
 /* gogits user ssh keys */
@@ -444,6 +601,43 @@ html, body {
     margin-right: 1em;
 }
 
+#user-dashboard-repo-new .btn-sm.dropdown-toggle {
+    padding: 3px 8px;
+}
+
+#user-dashboard-repo-new .dropdown-menu, #nav-repo-new .dropdown-menu {
+    padding: 0;
+    margin: 0;
+}
+
+#user-dashboard-repo-new ul, #nav-repo-new ul {
+    margin: 0;
+    width: 200px;
+}
+
+#user-dashboard-repo-new li a, #nav-repo-new li a {
+    line-height: 36px;
+    display: block;
+    padding: 0 18px;
+    color: #444;
+}
+
+#user-dashboard-repo-new li a:hover, #nav-repo-new li a:hover {
+    background: #0093c4;
+    color: #FFF;
+}
+
+#nav-repo-new button {
+    border: none;
+    background: transparent;
+    padding: 0;
+    width: 15px;
+}
+
+#nav-repo-new li .fa {
+    margin: 0 .5em;
+}
+
 /* gogits repo single page */
 
 #body-nav.repo-nav {
@@ -512,6 +706,16 @@ html, body {
     height: 39px;
 }
 
+#repo-toolbar .nav .tmp {
+    padding: 0 6px;
+}
+
+#repo-toolbar .nav .tmp a {
+    display: inline-block;
+    padding-left: 6px;
+    padding-right: 6px;
+}
+
 #repo-toolbar .nav .tmp a:hover {
     text-decoration: none;
 }
@@ -534,6 +738,10 @@ html, body {
 
 #repo-toolbar .navbar-collapse {
     padding: 0;
+}
+
+#repo-toolbar ul.navbar-right {
+    margin-right: 0;
 }
 
 .activity-list {
@@ -612,6 +820,10 @@ html, body {
 /* #source */
 #source, #commits {
     margin-top: -20px;
+}
+
+#commits-pager {
+    margin-top: 0;
 }
 
 #source .source-toolbar:after {
@@ -831,15 +1043,15 @@ html, body {
     margin-left: .5em;
 }
 
+#commits-search-form {
+    margin-top: 4px;
+}
+
 .commit-box .avatar, .diff-head-box .avatar {
     width: 20px;
     height: 20px;
     margin-right: 8px;
     vertical-align: top;
-}
-
-.commit-box .search {
-    margin-top: 3px;
 }
 
 .commit-box td {
@@ -1049,12 +1261,12 @@ html, body {
     border-color: #CCC;
 }
 
-#issue .filter-list a:hover {
+#issue .filter-list li a:hover {
     background-color: #DDD;
     text-decoration: none;
 }
 
-#issue .filter-list a.active {
+#issue .filter-list li a.active {
     background-color: #4183c4;
     color: #FFF;
 }
@@ -1166,7 +1378,7 @@ html, body {
     font-weight: normal;
 }
 
-#issue .issue-child .panel-heading .user,#issue .issue-closed a.user,#issue .issue-opened a.user {
+#issue .issue-child .panel-heading .user, #issue .issue-closed a.user, #issue .issue-opened a.user {
     font-weight: bold;
 }
 
@@ -1174,7 +1386,7 @@ html, body {
     border-color: #CCC;
 }
 
-#issue .issue-is-closed .issue-line{
+#issue .issue-is-closed .issue-line {
     display: none;
 }
 
@@ -1193,7 +1405,7 @@ html, body {
     width: 60%;
 }
 
-#issue .issue-closed .issue-content,#issue .issue-opened .issue-content{
+#issue .issue-closed .issue-content, #issue .issue-opened .issue-content {
     line-height: 42px;
 }
 
@@ -1203,8 +1415,76 @@ html, body {
     padding-bottom: 24px;
 }
 
-#issue .issue-closed .label-danger,#issue .issue-opened .label-success{
+#issue .issue-closed .label-danger, #issue .issue-opened .label-success {
     margin: 0 .8em;
+}
+
+#issue .milestone-item .actions {
+    margin-top: 10px;
+}
+
+#issue .milestone-item .actions a {
+    margin-left: 8px;
+}
+
+#issue .milestone-item hr {
+    width: 100%;
+    padding-top: 8px;
+    margin-top: 48px;
+    margin-bottom: 8px;
+}
+
+#issue .milestone-item .label {
+    margin-top: 8px;
+    float: left;
+    padding: .5em;
+    margin-left: .8em;
+}
+
+#issue .assignee.dropdown-menu, #issue .assignee ul {
+    padding: 0;
+    margin: 0;
+    min-width: 300px;
+}
+
+#issue .issue-bar .assignee, #issue .issue-bar .assignee ul {
+    min-width: 160px;
+}
+
+#issue .issue-bar .assignee .dropdown-menu{
+    padding: 0;
+    margin: 0;
+}
+
+#issue .assignee li {
+    padding: 4px 12px;
+    line-height: 30px;
+}
+
+#issue .assignee li:hover {
+    background-color: #e8f0ff;
+    cursor: pointer;
+}
+
+#issue .assignee li img, #issue .issue-bar .assignee img {
+    width: 28px;
+    height: 28px;
+    margin-right: 12px;
+}
+
+#issue .issue-bar > div {
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #CCC;
+}
+
+#issue .issue-bar .assignee {
+    line-height: 30px;
+}
+
+#issue .issue-bar .assignee .action{
+    position: relative;
+    margin-top: -8px;
 }
 
 /* wrapper and footer */
@@ -1235,9 +1515,143 @@ html, body {
 /* admin dashboard/configuration */
 
 .admin-dl-horizontal > dt {
-    width: 320px;
+    width: 220px;
 }
 
 .admin-dl-horizontal > dd {
-    margin-left: 340px;
+    margin-left: 240px;
+}
+
+/* release page */
+
+#release-head {
+    margin-top: 0;
+    padding-bottom: 30px;
+    margin-bottom: 0;
+    border-bottom: 1px solid #DDD;
+}
+
+#release .release-item .col-md-10 {
+    border-left: 1px solid #DDD;
+    position: relative;
+}
+
+#release .release-item .commit, #release .release-item .tag {
+    display: block;
+    margin-top: 12px;
+}
+
+#release .release-item.release-tag .commit {
+    margin-top: 6px;
+}
+
+#release .release-item .title {
+    line-height: 30px;
+    margin-top: 0;
+}
+
+#release .release-item .dot {
+    width: 9px;
+    height: 9px;
+    background-color: #ccc;
+    z-index: 999;
+    position: absolute;
+    display: block;
+    left: -5px;
+    top: 30px;
+    border-radius: 6px;
+    border: 1px solid #FFF;
+}
+
+#release .release-item > div {
+    padding-top: 20px;
+    padding-bottom: 20px;
+}
+
+#release .release-item p.info {
+    line-height: 20px;
+    color: #666;
+    margin-bottom: 18px;
+}
+
+#release .release-item div.desc {
+    margin-bottom: 18px;
+}
+
+#release .release-item p.info > *, #release .release-item .download a {
+    margin-right: 12px;
+}
+
+#release .release-item .info .avatar {
+    vertical-align: middle;
+}
+
+#release-new-form {
+    margin-top: 24px;
+}
+
+#release-new-form .target-at {
+    margin: 0 1em;
+}
+
+#release-new-form .target-text {
+    color: #888;
+}
+
+#release-new-target-branch-list {
+    padding-top: 0;
+    padding-bottom: 0;
+    min-width: 200px;
+}
+
+#release-new-target-branch-list ul {
+    margin-bottom: 0;
+}
+
+#release-new-target-branch-list li {
+    padding: 8px 20px;
+}
+
+#release-new-target-branch-list li a {
+    margin-left: 0;
+    background-color: transparent;
+    padding: 0;
+}
+
+#release-new-target-branch-list li a:hover {
+    background-image: none;
+}
+
+#release-new-target-branch-list li:hover {
+    background-color: #0093c4;
+}
+
+#release-new-target-branch-list li:hover a {
+    color: #FFF;
+}
+
+#release-new-title {
+    width: 50%;
+}
+
+#release-new-content-div {
+    margin-top: 16px;
+    padding-left: 0;
+}
+
+#release-new-content-div .md-help {
+    margin-top: 6px;
+}
+
+#release-textarea .form-group {
+    display: block;
+}
+
+#release-new-content {
+    width: 100%;
+    margin: 16px 0;
+}
+
+#release-preview {
+    margin: 6px 0;
 }

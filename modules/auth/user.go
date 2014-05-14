@@ -10,12 +10,12 @@ import (
 
 	"github.com/go-martini/martini"
 
-	"github.com/gogits/binding"
 	"github.com/gogits/session"
 
 	"github.com/gogits/gogs/models"
 	"github.com/gogits/gogs/modules/base"
 	"github.com/gogits/gogs/modules/log"
+	"github.com/gogits/gogs/modules/middleware/binding"
 )
 
 // SignedInId returns the id of signed in user.
@@ -75,14 +75,17 @@ type FeedsForm struct {
 }
 
 type UpdateProfileForm struct {
+	UserName string `form:"username" binding:"Required;AlphaDash;MaxSize(30)"`
+	FullName string `form:"fullname" binding:"MaxSize(40)"`
 	Email    string `form:"email" binding:"Required;Email;MaxSize(50)"`
-	Website  string `form:"website" binding:"MaxSize(50)"`
+	Website  string `form:"website" binding:"Url;MaxSize(50)"`
 	Location string `form:"location" binding:"MaxSize(50)"`
 	Avatar   string `form:"avatar" binding:"Required;Email;MaxSize(50)"`
 }
 
 func (f *UpdateProfileForm) Name(field string) string {
 	names := map[string]string{
+		"UserName": "Username",
 		"Email":    "E-mail address",
 		"Website":  "Website",
 		"Location": "Location",
@@ -91,22 +94,9 @@ func (f *UpdateProfileForm) Name(field string) string {
 	return names[field]
 }
 
-func (f *UpdateProfileForm) Validate(errors *binding.Errors, req *http.Request, context martini.Context) {
-	if req.Method == "GET" || errors.Count() == 0 {
-		return
-	}
-
-	data := context.Get(reflect.TypeOf(base.TmplData{})).Interface().(base.TmplData)
-	data["HasError"] = true
-
-	if len(errors.Overall) > 0 {
-		for _, err := range errors.Overall {
-			log.Error("UpdateProfileForm.Validate: %v", err)
-		}
-		return
-	}
-
-	validate(errors, data, f)
+func (f *UpdateProfileForm) Validate(errs *binding.Errors, req *http.Request, ctx martini.Context) {
+	data := ctx.Get(reflect.TypeOf(base.TmplData{})).Interface().(base.TmplData)
+	validate(errs, data, f)
 }
 
 type UpdatePasswdForm struct {
@@ -124,20 +114,7 @@ func (f *UpdatePasswdForm) Name(field string) string {
 	return names[field]
 }
 
-func (f *UpdatePasswdForm) Validate(errors *binding.Errors, req *http.Request, context martini.Context) {
-	if req.Method == "GET" || errors.Count() == 0 {
-		return
-	}
-
-	data := context.Get(reflect.TypeOf(base.TmplData{})).Interface().(base.TmplData)
-	data["HasError"] = true
-
-	if len(errors.Overall) > 0 {
-		for _, err := range errors.Overall {
-			log.Error("UpdatePasswdForm.Validate: %v", err)
-		}
-		return
-	}
-
-	validate(errors, data, f)
+func (f *UpdatePasswdForm) Validate(errs *binding.Errors, req *http.Request, ctx martini.Context) {
+	data := ctx.Get(reflect.TypeOf(base.TmplData{})).Interface().(base.TmplData)
+	validate(errs, data, f)
 }

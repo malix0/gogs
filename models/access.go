@@ -7,6 +7,8 @@ package models
 import (
 	"strings"
 	"time"
+
+	"github.com/go-xorm/xorm"
 )
 
 // Access types.
@@ -19,7 +21,7 @@ const (
 type Access struct {
 	Id       int64
 	UserName string    `xorm:"unique(s)"`
-	RepoName string    `xorm:"unique(s)"`
+	RepoName string    `xorm:"unique(s)"` // <user name>/<repo name>
 	Mode     int       `xorm:"unique(s)"`
 	Created  time.Time `xorm:"created"`
 }
@@ -32,12 +34,46 @@ func AddAccess(access *Access) error {
 	return err
 }
 
+// UpdateAccess updates access information.
+func UpdateAccess(access *Access) error {
+	access.UserName = strings.ToLower(access.UserName)
+	access.RepoName = strings.ToLower(access.RepoName)
+	_, err := orm.Id(access.Id).Update(access)
+	return err
+}
+
+// DeleteAccess deletes access record.
+func DeleteAccess(access *Access) error {
+	_, err := orm.Delete(access)
+	return err
+}
+
+// UpdateAccess updates access information with session for rolling back.
+func UpdateAccessWithSession(sess *xorm.Session, access *Access) error {
+	if _, err := sess.Id(access.Id).Update(access); err != nil {
+		sess.Rollback()
+		return err
+	}
+	return nil
+}
+
 // HasAccess returns true if someone can read or write to given repository.
-func HasAccess(userName, repoName string, mode int) (bool, error) {
-	return orm.Get(&Access{
-		Id:       0,
-		UserName: strings.ToLower(userName),
+// The repoName should be in format <username>/<reponame>.
+func HasAccess(uname, repoName string, mode int) (bool, error) {
+	if len(repoName) == 0 {
+		return false, nil
+	}
+	access := &Access{
+		UserName: strings.ToLower(uname),
 		RepoName: strings.ToLower(repoName),
-		Mode:     mode,
-	})
+	}
+	has, err := orm.Get(access)
+	if err != nil {
+		return false, err
+	} else if !has {
+		return false, nil
+	} else if mode > access.Mode {
+		return false, nil
+	}
+	return true, nil
 }
